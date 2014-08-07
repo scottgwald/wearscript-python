@@ -9,13 +9,18 @@ import msgpack
 import random
 import sys
 
+default_callback_key = 'default'
+
 class WebSocketException(Exception):
     """Generic error"""
 
 
 class WearScriptConnection(object):
 
-    def __init__(self, device=None, group='server'):
+    # def __init__(self, device=None, group='server'):
+    def __init__(self, **kw):
+        device = kw.get('device', None)
+        group = kw.get('group', 'defaultGroup')
         self._reset_channels_internal()
         self._reset_external_channels()
         self._group = group
@@ -41,6 +46,8 @@ class WearScriptConnection(object):
     def subscribe(self, channel, callback):
         self._lock.acquire()
         publish = channel not in self._channels_internal
+        if publish:
+            print "Publishing subscription to %s which was not in %s" %(channel, self._channels_internal.keys())
         self._channels_internal[channel] = callback
         channels = list(self._channels_internal)
         self._lock.release()
@@ -102,7 +109,7 @@ class WearScriptConnection(object):
                 # TODO(brandyn): Here we should reconnect
                 print('Disconnected!')
                 break
-            print('Got [%s]' % d[0])
+            print('Got [%s] on [%s]' % (d[0], self.group_device))
             if d[0] == 'subscriptions':
                 self._set_device_channels(d[1], d[2])
             try:
@@ -117,6 +124,17 @@ class WearScriptConnection(object):
                     raise
                 except:
                     print('Uncaught Exception: ' + str(sys.exc_info()))
+            else: #default callback
+                if not d[0] == 'subscriptions':
+                    try:
+                        callback = self._channels_internal.get(default_callback_key)
+                        callback(*d)
+                    except KeyError:
+                        pass
+                    except (SystemExit, WebSocketException):
+                        raise
+                    except:
+                        print('Uncaught exception in default callback ' + self.group_device)
 
     @property
     def channels_external(self):
@@ -173,8 +191,8 @@ class WearScriptConnection(object):
 
 class WebSocketServerConnection(WearScriptConnection):
 
-    def __init__(self, ws):
-        super(WebSocketServerConnection, self).__init__()
+    def __init__(self, ws, **kw):
+        super(WebSocketServerConnection, self).__init__(**kw)
         self.ws = ws
 
     def send(self, *args):
@@ -189,8 +207,8 @@ class WebSocketServerConnection(WearScriptConnection):
 
 class WebSocketClientConnection(WearScriptConnection):
 
-    def __init__(self, ws):
-        super(WebSocketClientConnection, self).__init__()
+    def __init__(self, ws, **kw):
+        super(WebSocketClientConnection, self).__init__(**kw)
         self.ws = ws
 
     def send(self, *args):
@@ -205,11 +223,12 @@ class WebSocketClientConnection(WearScriptConnection):
 
 def websocket_server(callback, websocket_port, **kw):
 
+    kw.setdefault('group', 'serverrrr')
     def websocket_app(environ, start_response):
         logging.info('Glass connected')
         if environ["PATH_INFO"] == '/':
             ws = environ["wsgi.websocket"]
-            callback(WebSocketServerConnection(ws), **kw)
+            callback(WebSocketServerConnection(ws, **kw))
     wsgi_server = pywsgi.WSGIServer(("", websocket_port), websocket_app,
                                     handler_class=WebSocketHandler)
     wsgi_server.serve_forever()
@@ -218,4 +237,5 @@ def websocket_server(callback, websocket_port, **kw):
 def websocket_client_factory(callback, client_endpoint, **kw):
     if not client_endpoint:
         client_endpoint = os.environ['WEARSCRIPT_ENDPOINT']
-    callback(WebSocketClientConnection(websocket.create_connection(client_endpoint)), **kw)
+    kw.setdefault('group', 'client')
+    callback(WebSocketClientConnection(websocket.create_connection(client_endpoint), **kw))
