@@ -21,6 +21,7 @@ class WearScriptConnection(object):
     def __init__(self, **kw):
         device = kw.get('device', None)
         group = kw.get('group', 'defaultGroup')
+        self.DEBUG = kw.get('debug', False)
         self._reset_channels_internal()
         self._reset_external_channels()
         self._group = group
@@ -46,7 +47,7 @@ class WearScriptConnection(object):
     def subscribe(self, channel, callback):
         self._lock.acquire()
         publish = channel not in self._channels_internal
-        if publish:
+        if publish and self.DEBUG:
             print "Publishing subscription to %s which was not in %s" %(channel, self._channels_internal.keys())
         self._channels_internal[channel] = callback
         channels = list(self._channels_internal)
@@ -109,7 +110,8 @@ class WearScriptConnection(object):
                 # TODO(brandyn): Here we should reconnect
                 print('Disconnected!')
                 break
-            print('Got [%s] on [%s]' % (d[0], self.group_device))
+            if self.DEBUG:
+                print('Got [%s] on [%s]' % (d[0], self.group_device))
             if d[0] == 'subscriptions':
                 self._set_device_channels(d[1], d[2])
             try:
