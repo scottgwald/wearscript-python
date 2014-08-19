@@ -125,7 +125,7 @@ class WearScriptConnection(object):
                 except (SystemExit, WebSocketException):
                     raise
                 except:
-                    print('Uncaught Exception: ' + str(sys.exc_info()))
+                    print('Uncaught Exception in callback: ' + str(sys.exc_info()))
             else: #default callback
                 if not d[0] == 'subscriptions':
                     try:
@@ -136,7 +136,7 @@ class WearScriptConnection(object):
                     except (SystemExit, WebSocketException):
                         raise
                     except:
-                        print('Uncaught exception in default callback ' + self.group_device)
+                        print('Uncaught exception in default callback ' + self.group_device + str(sys.exc_info()))
 
     @property
     def channels_external(self):
