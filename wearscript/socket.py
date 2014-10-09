@@ -59,9 +59,11 @@ class WearScriptConnection(object):
     def unsubscribe(self, channel):
         self._lock.acquire()
         publish = channel in self._channels_internal
-        del self._channels_internal[channel]
-        channels = list(self._channels_internal)
-        self._lock.release()
+        try:
+            del self._channels_internal[channel]
+            channels = list(self._channels_internal)
+        finally:
+            self._lock.release()
         if publish:
             self.send('subscriptions', self.group_device, channels)
         return self
